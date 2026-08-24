@@ -17,7 +17,10 @@ func NewStagger(slots int) *Stagger {
 }
 
 // Split partitions targets into `slots` windows preserving their order. Each
-// window contains a contiguous slice of the sorted list.
+// window contains a contiguous, non-overlapping slice of the sorted list, so
+// window boundaries are continuous: the first window covers [0, per), the
+// second [per, 2*per) and so on. A target never appears in two windows, which
+// keeps every target to a single scrape per cycle.
 func (s *Stagger) Split(targets []model.Target, slots int) [][]model.Target {
 	if slots < 1 {
 		slots = 1
@@ -30,9 +33,6 @@ func (s *Stagger) Split(targets []model.Target, slots int) [][]model.Target {
 	for i, target := range targets {
 		index := windowIndex(i, per, slots)
 		windows[index] = append(windows[index], target)
-		if i%per == per-1 && index+1 < slots {
-			windows[index+1] = append(windows[index+1], target)
-		}
 	}
 	return windows
 }
