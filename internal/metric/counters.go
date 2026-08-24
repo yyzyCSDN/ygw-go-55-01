@@ -7,6 +7,9 @@ const (
 	MetricSkipped = "scrape_skipped_total"
 	// MetricScrapes counts successful fetch executions.
 	MetricScrapes = "scrape_ok_total"
+	// MetricScrapeLateSuccess counts scrapes that honoured a response which
+	// arrived together with a timeout error, avoiding a redundant retry.
+	MetricScrapeLateSuccess = "scrape_late_success_total"
 	// MetricScrapeFailures counts failed fetch executions.
 	MetricScrapeFailures = "scrape_failed_total"
 	// MetricForwarded counts samples written to the downstream sink.

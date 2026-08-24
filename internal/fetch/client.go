@@ -42,15 +42,21 @@ func (c *HTTPClient) Scrape(ctx context.Context, target model.Target) (*Response
 		return nil, err
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
+	body, readErr := io.ReadAll(response.Body)
+	if readErr != nil && len(body) == 0 {
+		// Nothing arrived before the read failed; treat it as a plain
+		// transport failure so the fetcher can retry.
+		return nil, readErr
 	}
+	// The read can fail even when the response already arrived — most often
+	// because the scrape deadline fired a few dozen milliseconds late. Keep
+	// whatever was read so the fetcher can decide whether to honour it as a
+	// late success instead of throwing away good data and re-scraping.
 	return &Response{
 		Body:        body,
 		Status:      response.StatusCode,
 		ContentType: response.Header.Get("Content-Type"),
-	}, nil
+	}, readErr
 }
 
 // CloseResponse releases a response body that was handed back with an error.
