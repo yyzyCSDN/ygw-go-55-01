@@ -34,8 +34,13 @@ func (b *Buffer) Full() bool {
 }
 
 // Drain returns every pending sample in timestamp order and clears the buffer.
+// Multiple targets are scraped concurrently, so samples arrive interleaved by
+// completion time rather than by their actual timestamps. Sorting here keeps the
+// timeline the downstream sink receives consistent regardless of which scrape
+// finished first.
 func (b *Buffer) Drain() []model.MetricSample {
 	out := b.samples
 	b.samples = make([]model.MetricSample, 0, b.capacity)
+	model.SortSamples(out)
 	return out
 }
