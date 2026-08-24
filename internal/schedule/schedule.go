@@ -32,7 +32,6 @@ type Scheduler struct {
 	interval   time.Duration
 	slots      int
 	history    *JobHistory
-	cache      *discover.Snapshot
 
 	mu sync.Mutex
 }
@@ -102,14 +101,11 @@ func (s *Scheduler) RunCycle(now time.Time) CycleReport {
 	return report
 }
 
-// currentSnapshot returns the discovery snapshot the scheduler cached at
-// startup and keeps reusing for every cycle.
+// currentSnapshot returns the latest discovery snapshot so a target that has
+// been added or removed since the previous cycle is reflected immediately in
+// the dispatch plan.
 func (s *Scheduler) currentSnapshot() discover.Snapshot {
-	if s.cache == nil {
-		snapshot := s.store.Snapshot()
-		s.cache = &snapshot
-	}
-	return *s.cache
+	return s.store.Snapshot()
 }
 
 // recordJob writes a task record into the history ring.
