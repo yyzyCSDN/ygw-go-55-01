@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScrapeHub 采集监控</title>
+  <style>
+    body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    header { padding: 16px 24px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 18px; margin: 0; }
+    .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: #10b981; color: #fff; }
+    main { padding: 24px; display: grid; grid-template-columns: 320px 1fr; gap: 24px; }
+    .panel { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px; }
+    .panel h2 { font-size: 14px; margin: 0 0 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; }
+    .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .metric { background: #0f172a; border-radius: 8px; padding: 12px; }
+    .metric .value { font-size: 24px; font-weight: 700; color: #38bdf8; }
+    .metric .label { font-size: 12px; color: #64748b; margin-top: 4px; word-break: break-all; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-weight: 500; }
+    .status-ok { color: #34d399; }
+    .status-bad { color: #f87171; }
+    button { background: #2563eb; border: 0; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    button:hover { background: #1d4ed8; }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .toolbar span { font-size: 12px; color: #94a3b8; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ScrapeHub 采集监控</h1>
+    <span class="badge">running</span>
+  </header>
+  <main>
+    <section>
+      <div class="panel">
+        <h2>运行指标</h2>
+        <div class="metric-grid" id="metrics"></div>
+      </div>
+    </section>
+    <section>
+      <div class="panel">
+        <div class="toolbar">
+          <h2>采集目标</h2>
+          <button id="cycleBtn">触发一次采集</button>
+          <span id="lastCycle"></span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>目标</th><th>端点</th><th>类型</th><th>健康</th></tr>
+          </thead>
+          <tbody id="targetRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    const labelMap = {
+      scrape_dispatched_total: "派发次数",
+      scrape_skipped_total: "跳过次数",
+      scrape_ok_total: "抓取成功",
+      scrape_failed_total: "抓取失败",
+      forwarded_samples_total: "转发样本",
+      forwarded_dropped_total: "丢弃样本",
+      scrape_connections_open: "连接数",
+      scrape_workers_busy: "忙碌 worker",
+      retry_attempts_total: "重试次数",
+      task_state: "任务状态"
+    };
+    const stateNames = ["idle", "scheduled", "fetching", "parsed", "forwarded", "failed"];
+
+    async function refreshMetrics() {
+      const res = await fetch("/api/v1/metrics");
+      const data = await res.json();
+      const box = document.getElementById("metrics");
+      box.innerHTML = "";
+      for (const key of Object.keys(data)) {
+        if (!(key in labelMap)) continue;
+        const cell = document.createElement("div");
+        cell.className = "metric";
+        const value = key === "task_state" ? stateNames[data[key]] : Math.round(data[key] * 100) / 100;
+        cell.innerHTML = `<div class="value">${value}</div><div class="label">${labelMap[key]}</div>`;
+        box.appendChild(cell);
+      }
+    }
+
+    async function refreshTargets() {
+      const res = await fetch("/api/v1/targets");
+      const data = await res.json();
+      const rows = document.getElementById("targetRows");
+      rows.innerHTML = "";
+      for (const target of data.targets) {
+        const tr = document.createElement("tr");
+        const kind = target.kind === 0 ? "静态" : "服务发现";
+        tr.innerHTML = `
+          <td>${target.id}</td>
+          <td>${target.endpoint}</td>
+          <td>${kind}</td>
+          <td class="status-ok">-</td>`;
+        rows.appendChild(tr);
+      }
+      document.getElementById("lastCycle").textContent = "generation " + data.generation;
+    }
+
+    document.getElementById("cycleBtn").addEventListener("click", async () => {
+      const res = await fetch("/api/v1/cycle", { method: "POST" });
+      const report = await res.json();
+      document.getElementById("lastCycle").textContent =
+        `cycle ${report.cycle} dispatched ${report.dispatched.length} failed ${report.failed.length}`;
+      refreshMetrics();
+      refreshTargets();
+    });
+
+    refreshMetrics();
+    refreshTargets();
+    setInterval(refreshMetrics, 3000);
+    setInterval(refreshTargets, 5000);
+  </script>
+</body>
+</html>
